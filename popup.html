@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      --neon: #ccff00;
+      --bg: #050505;
+      --card: #111111;
+      --border: #333;
+      --text: #ffffff;
+      --text-dim: #888888;
+    }
+
+    body {
+      width: 320px;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .logo {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .logo span { color: var(--neon); }
+    
+    .badge {
+      background: #222;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid #444;
+      letter-spacing: 0.5px;
+    }
+
+    /* Master Switch Card */
+    .master-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .switch-label {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    /* Toggle Switch CSS */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #333;
+      transition: .4s;
+      border-radius: 34px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .slider { background-color: var(--neon); }
+    input:checked + .slider:before {
+      transform: translateX(18px);
+      background-color: #000;
+    }
+
+    /* Standard Cards */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 11px;
+      color: var(--text-dim);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    /* Text Input */
+    input[type="password"] {
+      width: 100%;
+      background: #000;
+      border: 1px solid var(--border);
+      color: white;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+      outline: none;
+      transition: border 0.2s;
+    }
+    input:focus { border-color: var(--neon); }
+
+    /* --- Custom Range Slider --- */
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      background: transparent;
+      margin: 10px 0;
+    }
+    input[type=range]:focus { outline: none; }
+
+    /* The Slider Track */
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 6px;
+      cursor: pointer;
+      background: #333;
+      border-radius: 3px;
+    }
+    
+    /* The Slider Thumb (Handle) */
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 18px;
+      width: 18px;
+      border-radius: 50%;
+      background: var(--neon);
+      cursor: pointer;
+      margin-top: -6px; /* Offsets the thumb to center it on the track */
+      box-shadow: 0 0 10px rgba(204, 255, 0, 0.4);
+    }
+
+    /* Buttons */
+    .btn-group { display: flex; gap: 10px; }
+    button {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    #save { background: var(--neon); color: black; border: none; }
+    #save:hover { opacity: 0.9; }
+    #test-btn { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    #test-btn:hover { border-color: var(--text-dim); }
+
+    #status {
+      font-size: 12px;
+      margin-top: 12px;
+      text-align: center;
+      display: none;
+    }
+    .status-success { color: var(--neon); }
+    .status-error { color: #ff3333; }
+    
+    .footer-link { text-align: center; margin-top: 16px; }
+    .footer-link a { color: var(--text-dim); text-decoration: none; font-size: 12px; }
+    .footer-link a:hover { color: var(--neon); }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">Clean<span>Feed</span></div>
+    <div class="badge">BETA</div>
+  </div>
+
+  <!-- Master Switch -->
+  <div class="master-card">
+    <div class="switch-label">Enable Filter</div>
+    <label class="switch">
+      <input type="checkbox" id="masterSwitch">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <!-- Token Input -->
+  <div class="card">
+    <label>API Token</label>
+    <input type="password" id="apiToken" placeholder="Paste token..." autocomplete="off">
+  </div>
+
+  <!-- Sensitivity Slider -->
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+      <label style="margin-bottom:0;">Confidence Threshold</label>
+      <span id="thresholdDisplay" style="color: var(--neon); font-weight: 800; font-size: 14px;">7</span>
+    </div>
+    
+    <input type="range" id="threshold" min="1" max="10" value="7" step="1">
+    
+    <div style="display: flex; justify-content: space-between; font-size: 10px; color: #555; margin-top: 2px;">
+      <span>Aggressive (1)</span>
+      <span>Strict (10)</span>
+    </div>
+  </div>
+
+  <div class="btn-group">
+    <button id="test-btn">Test</button>
+    <button id="save">Save</button>
+  </div>
+
+  <div id="status"></div>
+
+  <div class="footer-link">
+    <a href="https://cleanfeed.social/dashboard" target="_blank">Get API Token &rarr;</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
