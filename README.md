@@ -28,7 +28,7 @@ Since the extension is currently in **Beta** and not yet live on the Store, you 
 ## :gear: Configuration
 
 1. **Get your API Token:**
-   Sign up at your provider dashboard to generate your API key.
+   Sign up at [**cleanfeed.social**](https://cleanfeed.social) to generate your API key.
 2. **Open the Extension:**
    Click the CleanFeed logo in your browser toolbar.
 3. **Enter Credentials:**
