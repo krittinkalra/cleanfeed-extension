@@ -1,12 +1,19 @@
 {
   "manifest_version": 3,
   "name": "CleanFeed",
-  "version": "1.0",
-  "permissions": ["storage"],
+  "version": "3.1",
+  "permissions": ["storage", "alarms"],
   "host_permissions": [
-    "https://twitter.com/*",
-    "https://x.com/*",
-    "https://cleanfeed.social/*"
+    "*://*.twitter.com/*",
+    "*://twitter.com/*",
+    "*://*.x.com/*",
+    "*://x.com/*",
+    "*://*.reddit.com/*",
+    "*://reddit.com/*",
+    "*://*.linkedin.com/*",
+    "*://linkedin.com/*",
+    "https://cleanfeed.social/*",
+    "https://raw.githubusercontent.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -28,7 +35,16 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://twitter.com/*", "https://x.com/*"],
+      "matches": [
+        "*://*.twitter.com/*",
+        "*://twitter.com/*",
+        "*://*.x.com/*",
+        "*://x.com/*",
+        "*://*.reddit.com/*",
+        "*://reddit.com/*",
+        "*://*.linkedin.com/*",
+        "*://linkedin.com/*"
+      ],
       "js": ["content_isolated.js"],
       "world": "ISOLATED",
       "run_at": "document_idle"

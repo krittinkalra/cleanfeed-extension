@@ -1,0 +1,51 @@
+{
+  "twitter": {
+    "matches": ["twitter.com", "x.com"],
+    "selectors": "article[data-testid='tweet']",
+    "id": [
+      { "selector": "time", "closest": "a", "attribute": "href", "extractRegex": "\\/status\\/(\\d+)" }
+    ],
+    "text": [
+      { "selector": "[data-testid='tweetText']", "property": "innerText" }
+    ],
+    "blurTarget": [
+      { "selector": "self" }
+    ]
+  },
+  "reddit": {
+    "matches": ["reddit.com"],
+    "selectors": "shreddit-comment, shreddit-post",
+    "id": [
+      { "selector": "self", "attribute": "thingid" },
+      { "selector": "self", "attribute": "id" }
+    ],
+    "text": [
+      { "selector": "[slot='comment'], [slot='text-body']", "property": "innerText" }
+    ],
+    "blurTarget": [
+      { "selector": "[slot='comment'], [slot='text-body']" },
+      { "selector": "self" }
+    ]
+  },
+  "linkedin": {
+    "matches": ["linkedin.com"],
+    "selectors": ".feed-shared-update-v2, .comments-comment-item, [data-testid='expandable-text-box']",
+    "id": [
+      { "selector": "self", "attribute": "data-urn" },
+      { "selector": "self", "attribute": "data-id" },
+      { "selector": "self", "property": "id" },
+      { "selector": "self", "closest": "[componentkey]", "attribute": "componentkey" }
+    ],
+    "text": [
+      { "selector": "self", "conditionAttr": "data-testid", "conditionValue": "expandable-text-box", "property": "innerText", "removeRegex": "…\\s*more$" },
+      { "selector": ".feed-shared-update-v2__description-wrapper, .comments-comment-item__main-content, .update-components-text, [data-testid='expandable-text-box']", "property": "innerText", "removeRegex": "…\\s*more$" }
+    ],
+    "blurTarget": [
+      { "selector": "self", "conditionAttr": "data-testid", "conditionValue": "expandable-text-box", "closest": "p" },
+      { "selector": "self", "conditionAttr": "data-testid", "conditionValue": "expandable-text-box", "parentElement": true },
+      { "selector": ".feed-shared-update-v2__description-wrapper, .comments-comment-item__main-content, .update-components-text" },
+      { "selector": "self" }
+    ],
+    "fallbackIdToTextHash": true
+  }
+}

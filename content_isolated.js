@@ -1,6 +1,8 @@
+console.log("%c[CleanFeed] FILE INJECTED SUCCESSFULLY!", "background: red; color: white; font-size: 16px; font-weight: bold;");
+
 // --- 1. Configuration & Logger ---
 const CONFIG = {
-  excludedPaths: ['/settings', '/messages', '/compose', '/notifications'],
+  excludedPaths: ['/settings', '/messages', '/messaging', '/compose', '/notifications', '/chat'],
   neonColor: '#ccff00'
 };
 
@@ -10,176 +12,334 @@ const Logger = {
   log: (msg) => console.log(`${Logger.prefix} ${msg}`, Logger.styleInfo)
 };
 
-// --- 2. Master Switch Logic ---
+// --- 2. Dynamic Rule Interpreter ---
+let activePlatformRules = null;
+
+// The interpreter reads the JSON blocks to extract the right target/text
+function resolveRule(node, ruleArray) {
+  if (!ruleArray) return null;
+  
+  for (const rule of ruleArray) {
+    let target = node;
+
+    // 1. Check condition (e.g. data-testid="expandable-text-box")
+    if (rule.conditionAttr && target.getAttribute(rule.conditionAttr) !== rule.conditionValue) continue;
+
+    // 2. Find target
+    if (rule.selector && rule.selector !== 'self') {
+      target = node.querySelector(rule.selector);
+    }
+    if (!target) continue;
+
+    // 3. Traverse upwards if needed
+    if (rule.closest) {
+      target = target.closest(rule.closest);
+      if (!target) continue;
+    }
+    if (rule.parentElement) {
+      target = target.parentElement;
+      if (!target) continue;
+    }
+
+    // 4. Extract raw value
+    let val = target; // Defaults to the node itself (used for blurTargets)
+    if (rule.attribute) val = target.getAttribute(rule.attribute);
+    else if (rule.property) val = target[rule.property];
+
+    if (val == null) continue;
+
+    // 5. String manipulation
+    if (typeof val === 'string') {
+      if (rule.extractRegex) {
+        const match = val.match(new RegExp(rule.extractRegex));
+        if (match && match[1]) {
+          val = match[1];
+        } else {
+          continue; // Regex failed to match, try next rule
+        }
+      }
+      if (rule.removeRegex) {
+        val = val.replace(new RegExp(rule.removeRegex, 'i'), '').trim();
+      }
+    }
+
+    // If we successfully got a value (or a DOM node), return it immediately
+    if (val) return val;
+  }
+  return null;
+}
+
+const DynamicPlatform = {
+  selectors: () => activePlatformRules ? activePlatformRules.selectors : null,
+  getId: (node) => {
+    let id = resolveRule(node, activePlatformRules.id);
+    
+    // Fallback: Hash the first 40 chars of text to prevent duplicate API spam
+    if (!id && activePlatformRules.fallbackIdToTextHash) {
+      const text = (node.innerText || "").trim();
+      if (text.length > 0) {
+        id = 'li_txt_' + text.replace(/[^a-zA-Z0-9]/g, '').substring(0, 40);
+      }
+    }
+    return id;
+  },
+  getText: (node) => resolveRule(node, activePlatformRules.text),
+  getBlurTarget: (node) => resolveRule(node, activePlatformRules.blurTarget) || node
+};
+
+// --- 3. Master Switch Logic ---
 let isExtensionEnabled = true;
 
-// Inject toggle styles
+// Safely inject styles
 const styleSheet = document.createElement("style");
 styleSheet.textContent = `
-  /* When this class is on body, hide all CleanFeed overlays */
-  body.cleanfeed-disabled .cleanfeed-overlay {
-    display: none !important;
-  }
+  body.cleanfeed-disabled .cleanfeed-overlay { display: none !important; }
 `;
-document.head.appendChild(styleSheet);
+(document.head || document.documentElement).appendChild(styleSheet);
 
 function updateExtensionState(enabled) {
   isExtensionEnabled = enabled;
   if (enabled) {
     document.body.classList.remove('cleanfeed-disabled');
-    Logger.log("Extension Enabled");
+    Logger.log("Extension Enabled & Active on " + window.location.hostname);
   } else {
     document.body.classList.add('cleanfeed-disabled');
     Logger.log("Extension Disabled");
   }
 }
 
-// Initial Load
-chrome.storage.local.get(['extensionEnabled'], (data) => {
-  // Default to true if undefined
-  updateExtensionState(data.extensionEnabled !== false);
-});
-
-// Listen for live toggle changes
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.extensionEnabled) {
-    updateExtensionState(changes.extensionEnabled.newValue);
+  if (area === 'local') {
+    if (changes.extensionEnabled) {
+      updateExtensionState(changes.extensionEnabled.newValue);
+    }
+    if (changes.remoteRules) {
+      Logger.log("Remote rules updated from GitHub! Re-initializing...");
+      initialize(changes.remoteRules.newValue);
+    }
   }
 });
 
-// --- 3. Caching System ---
-const knownTweets = new Map();
+// --- 4. Caching System ---
+const knownContent = new Map();
 
-// --- 4. UI Blurring Logic ---
-function blurTweet(article, tweetId, score) {
-  if (article.querySelector('.cleanfeed-overlay')) return;
+// --- 5. UI Blurring Logic ---
+function blurContent(targetNode, contentId, score) {
+  if (targetNode.querySelector('.cleanfeed-overlay')) return;
+
+  const computedStyle = window.getComputedStyle(targetNode);
+  if (computedStyle.position === 'static') {
+    targetNode.style.position = "relative";
+  }
+
+  // UI FIX: Apply minimum height so short comments don't clip our button
+  const originalMinHeight = targetNode.style.minHeight;
+  targetNode.style.minHeight = '120px';
 
   const overlay = document.createElement("div");
   overlay.className = 'cleanfeed-overlay';
   overlay.style.cssText = `
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    z-index: 10;
-    background: rgba(0, 0, 0, 0.75); 
+    z-index: 999;
+    background: rgba(0, 0, 0, 0.85); 
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     gap: 12px;
+    border-radius: inherit;
     transition: opacity 0.3s ease;
   `;
   
   overlay.innerHTML = `
-    <div style="font-size: 16px; font-weight: 800; color: #fff; letter-spacing: -0.5px;">
+    <div style="font-size: 16px; font-weight: 800; color: #fff; letter-spacing: -0.5px; line-height: 1;">
       <span style="color: ${CONFIG.neonColor}">AI</span> DETECTED
     </div>
-    <div style="font-size: 12px; color: #aaa; font-family: monospace;">Confidence: ${score}/10</div>
-    <button id="rev-${tweetId}" style="
-      padding: 8px 16px; cursor: pointer; background: transparent; 
+    <div style="font-size: 12px; color: #aaa; font-family: monospace; margin-bottom: 4px;">Confidence: ${score}/10</div>
+    <button id="rev-${contentId}" style="
+      padding: 6px 14px; cursor: pointer; background: transparent; 
       border: 1px solid #555; border-radius: 20px; color: #fff; 
       font-weight: 600; font-size: 12px; transition: all 0.2s;
-    ">View Reply</button>
+    ">View Content</button>
   `;
 
-  article.style.position = "relative";
-  article.appendChild(overlay);
+  targetNode.appendChild(overlay);
 
-  const btn = document.getElementById(`rev-${tweetId}`);
+  const btn = overlay.querySelector(`#rev-${contentId}`);
   if(btn) {
     btn.onmouseover = () => { btn.style.borderColor = CONFIG.neonColor; btn.style.color = CONFIG.neonColor; };
     btn.onmouseout = () => { btn.style.borderColor = "#555"; btn.style.color = "#fff"; };
     btn.onclick = (e) => {
       e.stopPropagation();
+      e.preventDefault();
       overlay.style.opacity = "0";
+      targetNode.style.minHeight = originalMinHeight; // Reset height to normal
       setTimeout(() => overlay.remove(), 300);
-      knownTweets.set(tweetId, { ...knownTweets.get(tweetId), forceShow: true });
+      knownContent.set(contentId, { ...knownContent.get(contentId), forceShow: true });
     };
   }
 }
 
-// --- 5. Main Processor ---
-async function processTweet(article) {
-  // If disabled, stop processing immediately
-  if (!isExtensionEnabled) return;
+// --- 6. Main Processor ---
+async function processContentNode(node) {
+  if (!isExtensionEnabled || !activePlatformRules) return;
 
   const currentPath = window.location.pathname;
   if (CONFIG.excludedPaths.some(path => currentPath.startsWith(path))) return;
 
-  const timeElement = article.querySelector('time');
-  const linkElement = timeElement ? timeElement.closest('a') : null;
-  if (!linkElement) return;
-  
-  const href = linkElement.getAttribute('href'); 
-  const idMatch = href.match(/\/status\/(\d+)/);
-  if (!idMatch) return;
-  
-  const tweetId = idMatch[1];
+  const contentId = DynamicPlatform.getId(node);
+  if (!contentId) return;
 
-  if (knownTweets.has(tweetId)) {
-    const data = knownTweets.get(tweetId);
+  if (knownContent.has(contentId)) {
+    const data = knownContent.get(contentId);
     if (data.isAI && !data.forceShow) {
-      blurTweet(article, tweetId, data.score);
+      const targetNode = DynamicPlatform.getBlurTarget(node);
+      if (targetNode) blurContent(targetNode, contentId, data.score);
     }
     return;
   }
 
-  knownTweets.set(tweetId, { processing: true });
+  knownContent.set(contentId, { processing: true });
 
-  const textDiv = article.querySelector('[data-testid="tweetText"]');
-  if (!textDiv) return;
+  const rawText = DynamicPlatform.getText(node);
+  if (!rawText) return;
   
-  const text = textDiv.innerText.replace(/\s+/g, ' ').trim();
+  const text = rawText.replace(/\s+/g, ' ').trim();
   if (text.length < 30) return; 
 
   chrome.storage.local.get(['apiToken', 'threshold'], (settings) => {
-    if (!settings.apiToken) return;
-    // Double check enabled state before sending API request
-    if (!isExtensionEnabled) return; 
+    if (!settings.apiToken || !isExtensionEnabled) return;
+
+    // --- 🛠️ TELEMETRY LOG: SENDING ---
+    const startTime = performance.now();
+    Logger.log(`⏳ [SENDING] ID: ${contentId} | Text: "${text.substring(0, 35)}..."`);
 
     chrome.runtime.sendMessage(
-      { type: 'ANALYZE_TWEET', text, apiToken: settings.apiToken },
+      { type: 'ANALYZE_CONTENT', text, apiToken: settings.apiToken },
       (response) => {
+        // --- 🛠️ TELEMETRY LOG: RECEIVED ---
+        const timeTaken = (performance.now() - startTime).toFixed(0);
+
         if (!response || !response.success) {
-           knownTweets.delete(tweetId);
+           Logger.log(`❌ [ERROR] ID: ${contentId} | Failed after ${timeTaken}ms | Error: ${response?.error || 'Unknown'}`);
+           knownContent.delete(contentId);
            return;
         }
+
+        Logger.log(`✅ [RECEIVED] ID: ${contentId} | Score: ${response.score}/10 | Time: ${timeTaken}ms`);
 
         const threshold = parseInt(settings.threshold || 7, 10);
         const isAI = response.score >= threshold;
 
-        knownTweets.set(tweetId, { score: response.score, isAI: isAI, forceShow: false });
+        knownContent.set(contentId, { score: response.score, isAI: isAI, forceShow: false });
 
         if (isAI) {
-          blurTweet(article, tweetId, response.score);
+          const targetNode = DynamicPlatform.getBlurTarget(node);
+          if (targetNode) blurContent(targetNode, contentId, response.score);
         }
       }
     );
   });
 }
 
-// --- 6. Observer ---
+// --- 7. Observer & Initialization ---
 const observer = new MutationObserver((mutations) => {
-  if (!isExtensionEnabled) return; // Optional: pause observer logic completely
+  if (!isExtensionEnabled || !activePlatformRules) return;
+
+  const selectors = DynamicPlatform.selectors();
+  if (!selectors) return;
 
   for (const mutation of mutations) {
     mutation.addedNodes.forEach(node => {
-      if (node.nodeType === 1) {
-        if (node.tagName === 'ARTICLE' && node.getAttribute('data-testid') === 'tweet') {
-          processTweet(node);
-        } else if (node.querySelectorAll) {
-          const tweets = node.querySelectorAll('article[data-testid="tweet"]');
-          tweets.forEach(processTweet);
+      if (node.nodeType === 1) { // ELEMENT_NODE
+        if (node.matches && node.matches(selectors)) {
+          processContentNode(node);
+        }
+        if (node.querySelectorAll) {
+          const items = node.querySelectorAll(selectors);
+          items.forEach(processContentNode);
         }
       }
     });
   }
 });
 
-const timeline = document.querySelector('div[id="react-root"]');
-if (timeline) {
-  observer.observe(timeline, { childList: true, subtree: true });
-} else {
-  setTimeout(() => {
-    const retryTimeline = document.querySelector('div[id="react-root"]');
-    if (retryTimeline) observer.observe(retryTimeline, { childList: true, subtree: true });
-  }, 2000);
+function initialize(rules) {
+  // Find which platform we are currently on
+  activePlatformRules = null;
+  for (const [key, ruleSet] of Object.entries(rules)) {
+    if (ruleSet.matches.some(domain => window.location.hostname.includes(domain))) {
+      activePlatformRules = ruleSet;
+      break;
+    }
+  }
+
+  if (!activePlatformRules) return; // We are not on a supported site
+
+  const target = document.body || document.documentElement;
+  if (!target) return;
+
+  // Restart observer cleanly if re-initializing
+  observer.disconnect();
+  observer.observe(target, { childList: true, subtree: true });
+  Logger.log(`Observer attached. Dynamic rules loaded for: ${window.location.hostname}`);
+  
+  const selectors = DynamicPlatform.selectors();
+  if (selectors) {
+    document.querySelectorAll(selectors).forEach(processContentNode);
+  }
 }
+
+// Startup: Fetch storage (extension enabled state + remote rules)
+chrome.storage.local.get(['remoteRules', 'extensionEnabled'], (data) => {
+  updateExtensionState(data.extensionEnabled !== false);
+
+  // Hardcoded Fallback JSON
+  // This ensures the extension works instantly on first install before the background
+  // script finishes fetching the rules from GitHub!
+  const defaultRules = {
+    "twitter": {
+      "matches": ["twitter.com", "x.com"],
+      "selectors": "article[data-testid='tweet']",
+      "id": [ { "selector": "time", "closest": "a", "attribute": "href", "extractRegex": "\\/status\\/(\\d+)" } ],
+      "text": [ { "selector": "[data-testid='tweetText']", "property": "innerText" } ],
+      "blurTarget": [ { "selector": "self" } ]
+    },
+    "reddit": {
+      "matches": ["reddit.com"],
+      "selectors": "shreddit-comment, shreddit-post",
+      "id": [ { "selector": "self", "attribute": "thingid" }, { "selector": "self", "attribute": "id" } ],
+      "text": [ { "selector": "[slot='comment'], [slot='text-body']", "property": "innerText" } ],
+      "blurTarget": [ { "selector": "[slot='comment'], [slot='text-body']" }, { "selector": "self" } ]
+    },
+    "linkedin": {
+      "matches": ["linkedin.com"],
+      "selectors": ".feed-shared-update-v2, .comments-comment-item, [data-testid='expandable-text-box']",
+      "id": [
+        { "selector": "self", "attribute": "data-urn" },
+        { "selector": "self", "attribute": "data-id" },
+        { "selector": "self", "property": "id" },
+        { "selector": "self", "closest": "[componentkey]", "attribute": "componentkey" }
+      ],
+      "text": [
+        { "selector": "self", "conditionAttr": "data-testid", "conditionValue": "expandable-text-box", "property": "innerText", "removeRegex": "…\\s*more$" },
+        { "selector": ".feed-shared-update-v2__description-wrapper, .comments-comment-item__main-content, .update-components-text, [data-testid='expandable-text-box']", "property": "innerText", "removeRegex": "…\\s*more$" }
+      ],
+      "blurTarget": [
+        { "selector": "self", "conditionAttr": "data-testid", "conditionValue": "expandable-text-box", "closest": "p" },
+        { "selector": "self", "conditionAttr": "data-testid", "conditionValue": "expandable-text-box", "parentElement": true },
+        { "selector": ".feed-shared-update-v2__description-wrapper, .comments-comment-item__main-content, .update-components-text" },
+        { "selector": "self" }
+      ],
+      "fallbackIdToTextHash": true
+    }
+  };
+
+  const rulesToUse = data.remoteRules || defaultRules;
+  
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => initialize(rulesToUse));
+  } else {
+    initialize(rulesToUse);
+  }
+});
